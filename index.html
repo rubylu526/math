@@ -1,416 +1,492 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Printer, RefreshCw, FileText, CheckCircle, Type, Hash, BookOpen } from 'lucide-react';
-
-const MathGenerator = () => {
-  // 設定狀態
-  const [config, setConfig] = useState({
-    operations: {
-      add: true,
-      sub: true,
-      mul: false,
-      div: false
-    },
-    minNum: 1,
-    maxNum: 50,
-    problemCount: 20, // 每頁題數
-    sheetCount: 1,    // 產生幾份不同的試卷
-    fontSize: 'text-2xl', // text-xl, text-2xl, text-3xl
-    showAnswers: true,    // 是否產生答案卷
-    columnCount: 2        // 一行幾題
-  });
-
-  // 儲存生成的題目數據
-  // 結構: [{ id: 1, problems: [...], type: 'question' }, ...]
-  const [sheets, setSheets] = useState([]);
-  const [activeTab, setActiveTab] = useState(0);
-
-  // 初始化
-  useEffect(() => {
-    generateSheets();
-  }, []);
-
-  // 亂數輔助函數
-  const getRandomInt = (min, max) => {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  };
-
-  // 產生單一題目
-  const generateProblem = () => {
-    const ops = [];
-    if (config.operations.add) ops.push('+');
-    if (config.operations.sub) ops.push('-');
-    if (config.operations.mul) ops.push('×');
-    if (config.operations.div) ops.push('÷');
-
-    if (ops.length === 0) return { text: "請選擇運算符號", answer: 0 };
-
-    const op = ops[Math.floor(Math.random() * ops.length)];
-    let num1, num2, answer;
-
-    // 針對不同運算符號的邏輯優化（避免負數、確保除盡）
-    switch (op) {
-      case '+':
-        num1 = getRandomInt(config.minNum, config.maxNum);
-        num2 = getRandomInt(config.minNum, config.maxNum);
-        answer = num1 + num2;
-        break;
-      case '-':
-        num1 = getRandomInt(config.minNum, config.maxNum);
-        num2 = getRandomInt(config.minNum, num1); // 確保不出現負數
-        answer = num1 - num2;
-        break;
-      case '×':
-        // 乘法通常數字範圍要小一點，避免太難，這裡依據使用者設定
-        // 如果使用者設定最大50，做乘法可能會太大，稍微限制乘數
-        const limitMul = Math.ceil(Math.sqrt(config.maxNum)); 
-        // 但為了靈活，我們還是依照設定，使用者自己要控制範圍
-        num1 = getRandomInt(config.minNum, config.maxNum > 20 ? 20 : config.maxNum);
-        num2 = getRandomInt(config.minNum, config.maxNum > 20 ? 20 : config.maxNum);
-        answer = num1 * num2;
-        break;
-      case '÷':
-        // 除法：先決定答案和除數，反推被除數，確保整除
-        num2 = getRandomInt(2, config.maxNum > 12 ? 12 : config.maxNum); // 除數
-        answer = getRandomInt(1, config.maxNum > 12 ? 12 : config.maxNum); // 商
-        num1 = num2 * answer; // 被除數
-        break;
-      default:
-        break;
-    }
-
-    return {
-      num1,
-      num2,
-      op,
-      answer,
-      id: Math.random().toString(36).substr(2, 9)
-    };
-  };
-
-  // 產生所有試卷
-  const generateSheets = () => {
-    const newSheets = [];
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>樂齡數學題目產生器</title>
     
-    // 產生題目卷
-    for (let i = 0; i < config.sheetCount; i++) {
-      const problems = Array.from({ length: config.problemCount }, () => generateProblem());
-      newSheets.push({
-        id: `q-${i + 1}`,
-        title: `數學練習卷 - 第 ${i + 1} 回`,
-        type: 'question',
-        problems: problems
-      });
-    }
-
-    // 產生答案卷 (如果需要)
-    if (config.showAnswers) {
-      for (let i = 0; i < config.sheetCount; i++) {
-        // 找到對應的題目卷資料
-        const relatedSheet = newSheets[i];
-        newSheets.push({
-          id: `a-${i + 1}`,
-          title: `答案卷 - 第 ${i + 1} 回`,
-          type: 'answer',
-          problems: relatedSheet.problems
-        });
-      }
-    }
-
-    setSheets(newSheets);
-    setActiveTab(0);
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  // 更新設定
-  const updateConfig = (key, value) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
-  };
-
-  const updateOperation = (op) => {
-    setConfig(prev => ({
-      ...prev,
-      operations: { ...prev.operations, [op]: !prev.operations[op] }
-    }));
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-100 font-sans text-slate-800 flex flex-col md:flex-row">
-      {/* 左側控制面板 (列印時隱藏) */}
-      <div className="w-full md:w-80 bg-white shadow-lg p-6 flex flex-col gap-6 overflow-y-auto print:hidden z-10 h-auto md:h-screen sticky top-0">
-        <div className="flex items-center gap-2 border-b pb-4">
-          <BookOpen className="text-blue-600 w-6 h-6" />
-          <h1 className="text-xl font-bold text-gray-800">樂齡數學產生器</h1>
-        </div>
-
-        {/* 運算符號設定 */}
-        <section>
-          <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-            <Settings className="w-4 h-4" /> 運算符號
-          </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { key: 'add', label: '加法 (+)', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-              { key: 'sub', label: '減法 (-)', color: 'bg-green-50 text-green-700 border-green-200' },
-              { key: 'mul', label: '乘法 (×)', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-              { key: 'div', label: '除法 (÷)', color: 'bg-orange-50 text-orange-700 border-orange-200' },
-            ].map((op) => (
-              <label 
-                key={op.key} 
-                className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${config.operations[op.key] ? op.color + ' border-current ring-1' : 'bg-gray-50 border-gray-200 text-gray-400'}`}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={config.operations[op.key]} 
-                  onChange={() => updateOperation(op.key)}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="font-medium">{op.label}</span>
-              </label>
-            ))}
-          </div>
-        </section>
-
-        {/* 數字範圍設定 */}
-        <section>
-          <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-            <Hash className="w-4 h-4" /> 數字範圍與數量
-          </h2>
-          <div className="space-y-4">
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">最小值</label>
-                <input 
-                  type="number" 
-                  value={config.minNum} 
-                  onChange={(e) => updateConfig('minNum', parseInt(e.target.value) || 0)}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">最大值</label>
-                <input 
-                  type="number" 
-                  value={config.maxNum} 
-                  onChange={(e) => updateConfig('maxNum', parseInt(e.target.value) || 100)}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">每頁題數</label>
-                <select 
-                  value={config.problemCount}
-                  onChange={(e) => updateConfig('problemCount', parseInt(e.target.value))}
-                  className="w-full p-2 border rounded bg-white"
-                >
-                  <option value={10}>10 題 (特大字)</option>
-                  <option value={16}>16 題 (大字)</option>
-                  <option value={20}>20 題 (適中)</option>
-                  <option value={30}>30 題 (緊湊)</option>
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-gray-500 mb-1 block">產生份數</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  max="20"
-                  value={config.sheetCount} 
-                  onChange={(e) => updateConfig('sheetCount', parseInt(e.target.value) || 1)}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 外觀與其他設定 */}
-        <section>
-          <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-            <Type className="w-4 h-4" /> 版面設定
-          </h2>
-          <div className="space-y-3">
-             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700 text-sm">每行欄數</span>
-                <div className="flex gap-2">
-                    <button 
-                        onClick={() => updateConfig('columnCount', 1)}
-                        className={`px-3 py-1 text-sm rounded ${config.columnCount === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >1欄</button>
-                    <button 
-                        onClick={() => updateConfig('columnCount', 2)}
-                        className={`px-3 py-1 text-sm rounded ${config.columnCount === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >2欄</button>
-                     <button 
-                        onClick={() => updateConfig('columnCount', 3)}
-                        className={`px-3 py-1 text-sm rounded ${config.columnCount === 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
-                    >3欄</button>
-                </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-700 text-sm">字體大小</span>
-                <select 
-                  value={config.fontSize}
-                  onChange={(e) => updateConfig('fontSize', e.target.value)}
-                  className="bg-transparent border-none text-sm font-medium text-blue-600 focus:ring-0 cursor-pointer"
-                >
-                  <option value="text-xl">小</option>
-                  <option value="text-2xl">中</option>
-                  <option value="text-3xl">大</option>
-                  <option value="text-4xl">特大</option>
-                </select>
-            </div>
-
-            <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-              <div className={`w-5 h-5 rounded border flex items-center justify-center ${config.showAnswers ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400'}`}>
-                {config.showAnswers && <CheckCircle className="w-3.5 h-3.5 text-white" />}
-              </div>
-              <input 
-                type="checkbox" 
-                checked={config.showAnswers}
-                onChange={(e) => updateConfig('showAnswers', e.target.checked)}
-                className="hidden"
-              />
-              <span className="text-gray-700 text-sm">產生答案卷</span>
-            </label>
-          </div>
-        </section>
-
-        {/* 操作按鈕 */}
-        <div className="mt-auto pt-4 flex flex-col gap-3">
-          <button 
-            onClick={generateSheets}
-            className="w-full py-3 bg-gray-800 hover:bg-gray-900 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
-          >
-            <RefreshCw className="w-5 h-5" /> 重新產生題目
-          </button>
-          
-          <button 
-            onClick={handlePrint}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium shadow-lg shadow-blue-200 transition-colors"
-          >
-            <Printer className="w-5 h-5" /> 下載/列印 (A4)
-          </button>
-          <p className="text-xs text-center text-gray-400">建議使用 Chrome 瀏覽器列印，並取消「頁首頁尾」</p>
-        </div>
-      </div>
-
-      {/* 右側預覽區域 */}
-      <div className="flex-1 bg-gray-200 p-4 md:p-8 overflow-y-auto h-screen relative print:p-0 print:bg-white print:h-auto print:overflow-visible">
-        
-        {/* 頁籤切換 (列印時隱藏) */}
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 print:hidden max-w-4xl mx-auto">
-          {sheets.map((sheet, index) => (
-            <button
-              key={sheet.id}
-              onClick={() => setActiveTab(index)}
-              className={`px-4 py-2 rounded-t-lg font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === index 
-                  ? 'bg-white text-blue-600 shadow-sm border-t-2 border-blue-600' 
-                  : 'bg-gray-300 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {sheet.type === 'answer' ? `答案-${sheet.id.split('-')[1]}` : `試卷-${sheet.id.split('-')[1]}`}
-            </button>
-          ))}
-        </div>
-
-        {/* 實際紙張顯示區域 */}
-        {/* 在螢幕上，我們只顯示 activeTab 的內容。在列印時，我們顯示全部並使用 CSS 分頁 */}
-        <div className="print:block w-full">
-          {sheets.map((sheet, index) => (
-            <div 
-              key={sheet.id}
-              className={`
-                bg-white mx-auto shadow-xl p-[1cm] box-border relative
-                ${activeTab === index ? 'block' : 'hidden print:block'}
-                print:shadow-none print:m-0 print:w-full print:h-screen print:break-after-page
-              `}
-              style={{ 
-                width: '210mm', 
-                minHeight: '297mm', // A4 Height
-              }}
-            >
-              {/* 試卷頭部 */}
-              <div className="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-1">{sheet.title}</h1>
-                  <p className="text-gray-500 text-sm">
-                    {sheet.type === 'question' ? '請細心計算下列題目' : '核對答案時請保持耐心'}
-                  </p>
-                </div>
-                {sheet.type === 'question' && (
-                  <div className="flex gap-8 text-lg font-medium text-gray-700">
-                    <div className="border-b border-gray-400 w-32 pb-1">姓名：</div>
-                    <div className="border-b border-gray-400 w-24 pb-1">日期：</div>
-                    <div className="border-b border-gray-400 w-24 pb-1">得分：</div>
-                  </div>
-                )}
-              </div>
-
-              {/* 題目列表 */}
-              <div 
-                className="grid gap-x-12 gap-y-8" 
-                style={{ 
-                    gridTemplateColumns: `repeat(${config.columnCount}, 1fr)` 
-                }}
-              >
-                {sheet.problems.map((prob, idx) => (
-                  <div key={idx} className="flex items-center break-inside-avoid">
-                    <span className="w-8 text-gray-400 font-medium text-lg">{idx + 1}.</span>
-                    
-                    {sheet.type === 'question' ? (
-                      // 題目模式
-                      <div className={`flex items-center flex-1 font-serif tracking-wider ${config.fontSize}`}>
-                        <span className="w-16 text-right tabular-nums">{prob.num1}</span>
-                        <span className="w-12 text-center">{prob.op}</span>
-                        <span className="w-16 text-right tabular-nums">{prob.num2}</span>
-                        <span className="mx-4">=</span>
-                        {/* 答題橫線 */}
-                        <div className="flex-1 border-b-2 border-gray-300 h-8"></div>
-                      </div>
-                    ) : (
-                      // 答案模式
-                      <div className={`flex items-center flex-1 font-serif tracking-wider text-gray-600 ${config.fontSize === 'text-4xl' ? 'text-2xl' : config.fontSize}`}>
-                        <span className="w-12 text-right tabular-nums">{prob.num1}</span>
-                        <span className="w-8 text-center">{prob.op}</span>
-                        <span className="w-12 text-right tabular-nums">{prob.num2}</span>
-                        <span className="mx-2">=</span>
-                        <span className="font-bold text-red-600">{prob.answer}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* 頁尾 */}
-              <div className="absolute bottom-6 left-0 w-full text-center text-gray-400 text-xs">
-                樂齡數學練習 - 加油！動動腦，更健康
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <style>{`
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Custom Print Styles -->
+    <style>
         @media print {
-          @page {
-            size: A4;
-            margin: 0;
-          }
-          body {
-            background: white;
-          }
+            @page {
+                size: A4;
+                margin: 0;
+            }
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-break-after {
+                break-after: page;
+                page-break-after: always;
+            }
+            .print-full-width {
+                width: 100% !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+            }
         }
-      `}</style>
-    </div>
-  );
-};
+        
+        /* Custom scrollbar for better UX */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8; 
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-export default MathGenerator;
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Icons (Inline SVGs to avoid external dependencies) ---
+        const Icon = ({ name, className }) => {
+            const icons = {
+                Settings: <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>,
+                Printer: <polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect>,
+                RefreshCw: <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>,
+                FileText: <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line>,
+                CheckCircle: <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>,
+                Type: <polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>,
+                Hash: <line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line>,
+                BookOpen: <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            };
+
+            return (
+                <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="24" 
+                    height="24" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    className={className}
+                >
+                    {icons[name]}
+                </svg>
+            );
+        };
+
+        // --- Main Component ---
+        const MathGenerator = () => {
+            const [config, setConfig] = useState({
+                operations: {
+                    add: true,
+                    sub: true,
+                    mul: false,
+                    div: false
+                },
+                minNum: 1,
+                maxNum: 50,
+                problemCount: 20,
+                sheetCount: 1,
+                fontSize: 'text-2xl',
+                showAnswers: true,
+                columnCount: 2
+            });
+
+            const [sheets, setSheets] = useState([]);
+            const [activeTab, setActiveTab] = useState(0);
+
+            useEffect(() => {
+                generateSheets();
+            }, []);
+
+            const getRandomInt = (min, max) => {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            };
+
+            const generateProblem = () => {
+                const ops = [];
+                if (config.operations.add) ops.push('+');
+                if (config.operations.sub) ops.push('-');
+                if (config.operations.mul) ops.push('×');
+                if (config.operations.div) ops.push('÷');
+
+                if (ops.length === 0) return { text: "請選擇運算符號", answer: 0 };
+
+                const op = ops[Math.floor(Math.random() * ops.length)];
+                let num1, num2, answer;
+
+                switch (op) {
+                    case '+':
+                        num1 = getRandomInt(config.minNum, config.maxNum);
+                        num2 = getRandomInt(config.minNum, config.maxNum);
+                        answer = num1 + num2;
+                        break;
+                    case '-':
+                        num1 = getRandomInt(config.minNum, config.maxNum);
+                        num2 = getRandomInt(config.minNum, num1);
+                        answer = num1 - num2;
+                        break;
+                    case '×':
+                        const limitMul = Math.ceil(Math.sqrt(config.maxNum));
+                        num1 = getRandomInt(config.minNum, config.maxNum > 20 ? 20 : config.maxNum);
+                        num2 = getRandomInt(config.minNum, config.maxNum > 20 ? 20 : config.maxNum);
+                        answer = num1 * num2;
+                        break;
+                    case '÷':
+                        num2 = getRandomInt(2, config.maxNum > 12 ? 12 : config.maxNum);
+                        answer = getRandomInt(1, config.maxNum > 12 ? 12 : config.maxNum);
+                        num1 = num2 * answer;
+                        break;
+                    default:
+                        break;
+                }
+
+                return {
+                    num1,
+                    num2,
+                    op,
+                    answer,
+                    id: Math.random().toString(36).substr(2, 9)
+                };
+            };
+
+            const generateSheets = () => {
+                const newSheets = [];
+                
+                for (let i = 0; i < config.sheetCount; i++) {
+                    const problems = Array.from({ length: config.problemCount }, () => generateProblem());
+                    newSheets.push({
+                        id: `q-${i + 1}`,
+                        title: `數學練習卷 - 第 ${i + 1} 回`,
+                        type: 'question',
+                        problems: problems
+                    });
+                }
+
+                if (config.showAnswers) {
+                    for (let i = 0; i < config.sheetCount; i++) {
+                        const relatedSheet = newSheets[i];
+                        newSheets.push({
+                            id: `a-${i + 1}`,
+                            title: `答案卷 - 第 ${i + 1} 回`,
+                            type: 'answer',
+                            problems: relatedSheet.problems
+                        });
+                    }
+                }
+
+                setSheets(newSheets);
+                setActiveTab(0);
+            };
+
+            const handlePrint = () => {
+                window.print();
+            };
+
+            const updateConfig = (key, value) => {
+                setConfig(prev => ({ ...prev, [key]: value }));
+            };
+
+            const updateOperation = (op) => {
+                setConfig(prev => ({
+                    ...prev,
+                    operations: { ...prev.operations, [op]: !prev.operations[op] }
+                }));
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100 font-sans text-slate-800 flex flex-col md:flex-row">
+                    {/* 控制面板 */}
+                    <div className="w-full md:w-80 bg-white shadow-lg p-6 flex flex-col gap-6 overflow-y-auto no-print z-10 h-auto md:h-screen sticky top-0">
+                        <div className="flex items-center gap-2 border-b pb-4">
+                            <Icon name="BookOpen" className="text-blue-600 w-6 h-6" />
+                            <h1 className="text-xl font-bold text-gray-800">樂齡數學產生器</h1>
+                        </div>
+
+                        {/* 運算符號 */}
+                        <section>
+                            <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                                <Icon name="Settings" className="w-4 h-4" /> 運算符號
+                            </h2>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { key: 'add', label: '加法 (+)', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                                    { key: 'sub', label: '減法 (-)', color: 'bg-green-50 text-green-700 border-green-200' },
+                                    { key: 'mul', label: '乘法 (×)', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                                    { key: 'div', label: '除法 (÷)', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+                                ].map((op) => (
+                                    <label 
+                                        key={op.key} 
+                                        className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${config.operations[op.key] ? op.color + ' border-current ring-1' : 'bg-gray-50 border-gray-200 text-gray-400'}`}
+                                    >
+                                        <input 
+                                            type="checkbox" 
+                                            checked={config.operations[op.key]} 
+                                            onChange={() => updateOperation(op.key)}
+                                            className="w-4 h-4 rounded"
+                                        />
+                                        <span className="font-medium">{op.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </section>
+
+                        {/* 數字範圍 */}
+                        <section>
+                            <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                                <Icon name="Hash" className="w-4 h-4" /> 數字範圍與數量
+                            </h2>
+                            <div className="space-y-4">
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">最小值</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.minNum} 
+                                            onChange={(e) => updateConfig('minNum', parseInt(e.target.value) || 0)}
+                                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">最大值</label>
+                                        <input 
+                                            type="number" 
+                                            value={config.maxNum} 
+                                            onChange={(e) => updateConfig('maxNum', parseInt(e.target.value) || 100)}
+                                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">每頁題數</label>
+                                        <select 
+                                            value={config.problemCount}
+                                            onChange={(e) => updateConfig('problemCount', parseInt(e.target.value))}
+                                            className="w-full p-2 border rounded bg-white"
+                                        >
+                                            <option value={10}>10 題 (特大字)</option>
+                                            <option value={16}>16 題 (大字)</option>
+                                            <option value={20}>20 題 (適中)</option>
+                                            <option value={30}>30 題 (緊湊)</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-xs text-gray-500 mb-1 block">產生份數</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            max="20"
+                                            value={config.sheetCount} 
+                                            onChange={(e) => updateConfig('sheetCount', parseInt(e.target.value) || 1)}
+                                            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* 版面設定 */}
+                        <section>
+                            <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                                <Icon name="Type" className="w-4 h-4" /> 版面設定
+                            </h2>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <span className="text-gray-700 text-sm">每行欄數</span>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => updateConfig('columnCount', 1)}
+                                            className={`px-3 py-1 text-sm rounded ${config.columnCount === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                                        >1欄</button>
+                                        <button 
+                                            onClick={() => updateConfig('columnCount', 2)}
+                                            className={`px-3 py-1 text-sm rounded ${config.columnCount === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                                        >2欄</button>
+                                         <button 
+                                            onClick={() => updateConfig('columnCount', 3)}
+                                            className={`px-3 py-1 text-sm rounded ${config.columnCount === 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+                                        >3欄</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <span className="text-gray-700 text-sm">字體大小</span>
+                                    <select 
+                                        value={config.fontSize}
+                                        onChange={(e) => updateConfig('fontSize', e.target.value)}
+                                        className="bg-transparent border-none text-sm font-medium text-blue-600 focus:ring-0 cursor-pointer"
+                                    >
+                                        <option value="text-xl">小</option>
+                                        <option value="text-2xl">中</option>
+                                        <option value="text-3xl">大</option>
+                                        <option value="text-4xl">特大</option>
+                                    </select>
+                                </div>
+
+                                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${config.showAnswers ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-400'}`}>
+                                        {config.showAnswers && <Icon name="CheckCircle" className="w-3.5 h-3.5 text-white" />}
+                                    </div>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={config.showAnswers}
+                                        onChange={(e) => updateConfig('showAnswers', e.target.checked)}
+                                        className="hidden"
+                                    />
+                                    <span className="text-gray-700 text-sm">產生答案卷</span>
+                                </label>
+                            </div>
+                        </section>
+
+                        {/* 按鈕 */}
+                        <div className="mt-auto pt-4 flex flex-col gap-3">
+                            <button 
+                                onClick={generateSheets}
+                                className="w-full py-3 bg-gray-800 hover:bg-gray-900 text-white rounded-lg flex items-center justify-center gap-2 font-medium transition-colors"
+                            >
+                                <Icon name="RefreshCw" className="w-5 h-5" /> 重新產生題目
+                            </button>
+                            
+                            <button 
+                                onClick={handlePrint}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 font-medium shadow-lg shadow-blue-200 transition-colors"
+                            >
+                                <Icon name="Printer" className="w-5 h-5" /> 下載/列印 (A4)
+                            </button>
+                            <p className="text-xs text-center text-gray-400">建議使用 Chrome 瀏覽器列印，並取消「頁首頁尾」</p>
+                        </div>
+                    </div>
+
+                    {/* 預覽區域 */}
+                    <div className="flex-1 bg-gray-200 p-4 md:p-8 overflow-y-auto h-screen relative print-full-width">
+                        
+                        {/* 頁籤 */}
+                        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 no-print max-w-4xl mx-auto">
+                            {sheets.map((sheet, index) => (
+                                <button
+                                    key={sheet.id}
+                                    onClick={() => setActiveTab(index)}
+                                    className={`px-4 py-2 rounded-t-lg font-medium text-sm whitespace-nowrap transition-colors ${
+                                        activeTab === index 
+                                            ? 'bg-white text-blue-600 shadow-sm border-t-2 border-blue-600' 
+                                            : 'bg-gray-300 text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    {sheet.type === 'answer' ? `答案-${sheet.id.split('-')[1]}` : `試卷-${sheet.id.split('-')[1]}`}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* 紙張內容 */}
+                        <div className="w-full">
+                            {sheets.map((sheet, index) => (
+                                <div 
+                                    key={sheet.id}
+                                    className={`
+                                        bg-white mx-auto shadow-xl p-[1cm] box-border relative
+                                        ${activeTab === index ? 'block' : 'hidden'}
+                                        print-full-width print-break-after
+                                    `}
+                                    style={{ 
+                                        width: '210mm', 
+                                        minHeight: '297mm',
+                                    }}
+                                >
+                                    {/* 列印顯示控制: 在列印時強制顯示所有頁面 */}
+                                    <style>{`
+                                        @media print {
+                                            div[class*="hidden"] {
+                                                display: block !important;
+                                            }
+                                        }
+                                    `}</style>
+
+                                    {/* 試卷頭部 */}
+                                    <div className="border-b-2 border-gray-800 pb-4 mb-6 flex justify-between items-end">
+                                        <div>
+                                            <h1 className="text-3xl font-bold text-gray-900 mb-1">{sheet.title}</h1>
+                                            <p className="text-gray-500 text-sm">
+                                                {sheet.type === 'question' ? '請細心計算下列題目' : '核對答案時請保持耐心'}
+                                            </p>
+                                        </div>
+                                        {sheet.type === 'question' && (
+                                            <div className="flex gap-8 text-lg font-medium text-gray-700">
+                                                <div className="border-b border-gray-400 w-32 pb-1">姓名：</div>
+                                                <div className="border-b border-gray-400 w-24 pb-1">日期：</div>
+                                                <div className="border-b border-gray-400 w-24 pb-1">得分：</div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 題目 */}
+                                    <div 
+                                        className="grid gap-x-12 gap-y-8" 
+                                        style={{ 
+                                            gridTemplateColumns: `repeat(${config.columnCount}, 1fr)` 
+                                        }}
+                                    >
+                                        {sheet.problems.map((prob, idx) => (
+                                            <div key={idx} className="flex items-center" style={{ pageBreakInside: 'avoid' }}>
+                                                <span className="w-8 text-gray-400 font-medium text-lg">{idx + 1}.</span>
+                                                
+                                                {sheet.type === 'question' ? (
+                                                    <div className={`flex items-center flex-1 font-serif tracking-wider ${config.fontSize}`}>
+                                                        <span className="w-16 text-right tabular-nums">{prob.num1}</span>
+                                                        <span className="w-12 text-center">{prob.op}</span>
+                                                        <span className="w-16 text-right tabular-nums">{prob.num2}</span>
+                                                        <span className="mx-4">=</span>
+                                                        <div className="flex-1 border-b-2 border-gray-300 h-8"></div>
+                                                    </div>
+                                                ) : (
+                                                    <div className={`flex items-center flex-1 font-serif tracking-wider text-gray-600 ${config.fontSize === 'text-4xl' ? 'text-2xl' : config.fontSize}`}>
+                                                        <span className="w-12 text-right tabular-nums">{prob.num1}</span>
+                                                        <span className="w-8 text-center">{prob.op}</span>
+                                                        <span className="w-12 text-right tabular-nums">{prob.num2}</span>
+                                                        <span className="mx-2">=</span>
+                                                        <span className="font-bold text-red-600">{prob.answer}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* 頁尾 */}
+                                    <div className="absolute bottom-6 left-0 w-full text-center text-gray-400 text-xs">
+                                        樂齡數學練習 - 加油！動動腦，更健康
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MathGenerator />);
+    </script>
+</body>
+</html>
